@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 👨‍🏫 Verificar e solicitar nome do professor
 function verificarNomeProfessor() {
     if (!nomeProfessor) {
+        // O prompt aqui pode gerar o warning se a aba não estiver ativa
         const nome = prompt('👨‍🏫 Por favor, digite seu nome (Professor):');
         if (nome && nome.trim()) {
             nomeProfessor = nome.trim();
@@ -75,6 +76,7 @@ function carregarListaRedacoes() {
     optionUpload.textContent = '📤 Carregar Nova Redação...';
     seletorRedacao.appendChild(optionUpload);
 
+    // Esta função depende do array 'redacoes' que vem de 'js/redacoes.js'
     redacoes.forEach(redacao => {
         const option = document.createElement('option');
         option.value = redacao.id;
@@ -204,11 +206,14 @@ function carregarRedacao() {
     }
 
     const id = parseInt(valor);
+    // 'redacoes' é o array que vem de 'js/redacoes.js'
     redacaoAtual = redacoes.find(r => r.id === id);
 
     nomeAluno.textContent = redacaoAtual.aluno;
     temaRedacao.textContent = redacaoAtual.tema;
 
+    // AQUI é onde o caminho da imagem é construído.
+    // Se 'redacaoAtual.imagem' for "redacao1.jpg", o caminho será "images/redacao1.jpg"
     carregarImagem(`images/${redacaoAtual.imagem}`);
     resetarAvaliacao();
 }
@@ -234,7 +239,7 @@ function carregarNovaRedacao() {
                 id: Date.now(),
                 aluno: nomeAlunoInput,
                 tema: tema,
-                imagem: file.name,
+                imagem: file.name, // Aqui o nome da imagem é o nome do arquivo carregado
                 data: new Date().toLocaleDateString('pt-BR'),
                 imagemData: event.target.result
             };
@@ -242,7 +247,7 @@ function carregarNovaRedacao() {
             nomeAluno.textContent = nomeAlunoInput;
             temaRedacao.textContent = tema;
 
-            carregarImagem(event.target.result);
+            carregarImagem(event.target.result); // Carrega a imagem diretamente do Data URL
             resetarAvaliacao();
         };
         reader.readAsDataURL(file);
@@ -252,7 +257,7 @@ function carregarNovaRedacao() {
 }
 
 function carregarImagem(src) {
-    imagemRedacao.src = src;
+    imagemRedacao.src = src; // 'src' pode ser "images/nome.jpg" ou um Data URL
 
     imagemRedacao.onload = function() {
         canvasRedacao.width = imagemRedacao.naturalWidth;
@@ -271,7 +276,8 @@ function carregarImagem(src) {
     };
 
     imagemRedacao.onerror = function() {
-        alert('❌ Erro ao carregar a imagem.');
+        alert('❌ Erro ao carregar a imagem. Verifique o caminho e o nome do arquivo.');
+        console.error(`Falha ao carregar imagem: ${src}`); // Adicionado log para depuração
     };
 }
 
@@ -731,6 +737,7 @@ async function gerarPDF(correcao) {
         const pageHeight = pdf.internal.pageSize.getHeight();
 
         // Logo ENSPS
+        // Este URL é externo ao seu repositório, então deve funcionar se o link estiver correto.
         const logoUrl = 'https://raw.githubusercontent.com/ciliocavalcante-design/ensps/main/LOGO%20ENSPS%202024.5.png';
 
         try {
