@@ -31,8 +31,18 @@ const corCaneta = document.getElementById('corCaneta');
 const btnLimparDesenho = document.getElementById('btnLimparDesenho');
 const containerImagem = document.querySelector('.container-imagem');
 
+// Adicionar um wrapper para o zoom (será criado e preenchido no DOMContentLoaded)
+let zoomWrapper = null;
+
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
+    // Cria o zoomWrapper e move imagem/canvas para dentro dele
+    zoomWrapper = document.createElement('div');
+    zoomWrapper.className = 'zoom-wrapper'; // Adiciona a classe para o CSS
+    containerImagem.appendChild(zoomWrapper);
+    zoomWrapper.appendChild(imagemRedacao);
+    zoomWrapper.appendChild(canvasRedacao);
+
     carregarListaRedacoes();
     configurarEventos();
     configurarZoom();
@@ -44,7 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 👨‍🏫 Verificar e solicitar nome do professor
 function verificarNomeProfessor() {
     if (!nomeProfessor) {
-        // O prompt aqui pode gerar o warning se a aba não estiver ativa
         const nome = prompt('👨‍🏫 Por favor, digite seu nome (Professor):');
         if (nome && nome.trim()) {
             nomeProfessor = nome.trim();
@@ -76,7 +85,6 @@ function carregarListaRedacoes() {
     optionUpload.textContent = '📤 Carregar Nova Redação...';
     seletorRedacao.appendChild(optionUpload);
 
-    // Esta função depende do array 'redacoes' que vem de 'js/redacoes.js'
     redacoes.forEach(redacao => {
         const option = document.createElement('option');
         option.value = redacao.id;
@@ -175,22 +183,13 @@ function atualizarDisplayZoom() {
 }
 
 function aplicarZoom() {
-    const width = imagemRedacao.naturalWidth * zoomLevel;
-    const height = imagemRedacao.naturalHeight * zoomLevel;
-
-    imagemRedacao.style.width = width + 'px';
-    imagemRedacao.style.height = height + 'px';
-
-    canvasRedacao.style.width = width + 'px';
-    canvasRedacao.style.height = height + 'px';
-
-    canvasRedacao.width = imagemRedacao.naturalWidth;
-    canvasRedacao.height = imagemRedacao.naturalHeight;
-
-    redesenharCanvas();
+    // Aplica a transformação de escala no wrapper
+    if (zoomWrapper) {
+        zoomWrapper.style.transform = `scale(${zoomLevel})`;
+        // Ajusta o scroll do container-imagem para que o zoom seja visível
+        // O overflow:auto no .zoom-wrapper já deve lidar com isso
+    }
 }
-
-
 
 function carregarRedacao() {
     const valor = seletorRedacao.value;
@@ -206,14 +205,11 @@ function carregarRedacao() {
     }
 
     const id = parseInt(valor);
-    // 'redacoes' é o array que vem de 'js/redacoes.js'
     redacaoAtual = redacoes.find(r => r.id === id);
 
     nomeAluno.textContent = redacaoAtual.aluno;
     temaRedacao.textContent = redacaoAtual.tema;
 
-    // AQUI é onde o caminho da imagem é construído.
-    // Se 'redacaoAtual.imagem' for "redacao1.jpg", o caminho será "images/redacao1.jpg"
     carregarImagem(`images/${redacaoAtual.imagem}`);
     resetarAvaliacao();
 }
@@ -239,7 +235,7 @@ function carregarNovaRedacao() {
                 id: Date.now(),
                 aluno: nomeAlunoInput,
                 tema: tema,
-                imagem: file.name, // Aqui o nome da imagem é o nome do arquivo carregado
+                imagem: file.name,
                 data: new Date().toLocaleDateString('pt-BR'),
                 imagemData: event.target.result
             };
@@ -247,7 +243,7 @@ function carregarNovaRedacao() {
             nomeAluno.textContent = nomeAlunoInput;
             temaRedacao.textContent = tema;
 
-            carregarImagem(event.target.result); // Carrega a imagem diretamente do Data URL
+            carregarImagem(event.target.result);
             resetarAvaliacao();
         };
         reader.readAsDataURL(file);
@@ -257,9 +253,14 @@ function carregarNovaRedacao() {
 }
 
 function carregarImagem(src) {
-    imagemRedacao.src = src; // 'src' pode ser "images/nome.jpg" ou um Data URL
+    // ESSA É A LINHA CRÍTICA PARA O PDF E PARA O CORS EM AMBIENTES ONLINE
+    imagemRedacao.crossOrigin = 'Anonymous'; // Adicionado para evitar "Tainted Canvas"
+
+    imagemRedacao.src = src;
 
     imagemRedacao.onload = function() {
+        // Redefine as dimensões do canvas para as dimensões naturais da imagem
+        // Isso é importante para a proporção do desenho
         canvasRedacao.width = imagemRedacao.naturalWidth;
         canvasRedacao.height = imagemRedacao.naturalHeight;
 
@@ -267,17 +268,22 @@ function carregarImagem(src) {
         canvasDesenho.height = imagemRedacao.naturalHeight;
         ctxDesenho.clearRect(0, 0, canvasDesenho.width, canvasDesenho.height);
 
-        zoomLevel = 1;
+        zoomLevel = 1; // Reseta o zoom ao carregar nova imagem
         aplicarZoom();
         atualizarDisplayZoom();
 
         redesenharCanvas();
         areaCorrecao.style.display = 'grid';
+
+        // Ajusta a altura do container-imagem para a proporção da imagem
+        // Isso é importante para o object-fit: contain funcionar bem
+        const aspectRatio = imagemRedacao.naturalHeight / imagemRedacao.naturalWidth;
+        containerImagem.style.paddingBottom = `${aspectRatio * 100}%`;
     };
 
     imagemRedacao.onerror = function() {
-        alert('❌ Erro ao carregar a imagem. Verifique o caminho e o nome do arquivo.');
-        console.error(`Falha ao carregar imagem: ${src}`); // Adicionado log para depuração
+        alert('❌ Erro ao carregar a imagem.');
+        console.error(`Falha ao carregar imagem: ${src}`);
     };
 }
 
@@ -304,13 +310,15 @@ function setTool(tool) {
     }
 }
 
+// A função getCanvasCoordinates precisa ser ajustada para levar em conta o zoom
 function getCanvasCoordinates(e) {
     const rect = canvasRedacao.getBoundingClientRect();
     const scaleX = canvasRedacao.width / rect.width;
     const scaleY = canvasRedacao.height / rect.height;
 
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    // Ajusta as coordenadas do mouse pelo zoomLevel
+    const x = (e.clientX - rect.left) * scaleX / zoomLevel;
+    const y = (e.clientY - rect.top) * scaleY / zoomLevel;
 
     return { x, y };
 }
@@ -737,7 +745,6 @@ async function gerarPDF(correcao) {
         const pageHeight = pdf.internal.pageSize.getHeight();
 
         // Logo ENSPS
-        // Este URL é externo ao seu repositório, então deve funcionar se o link estiver correto.
         const logoUrl = 'https://raw.githubusercontent.com/ciliocavalcante-design/ensps/main/LOGO%20ENSPS%202024.5.png';
 
         try {
